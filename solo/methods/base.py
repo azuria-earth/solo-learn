@@ -314,14 +314,12 @@ class BaseMethod(pl.LightningModule):
 
         method = self.extra_args.get("method", None)
 
-        print('self.backbone_name ', self.backbone_name)
-
         if "efficientnet_lite0" in self.backbone_name :
             self.backbone = self.base_model(method)
         else:
-            self.backbone = self.base_model(method, **kwargs)
+            self.backbone = self.base_model(method, **kwargs) # here **kwargs = {'img_size':224}
 
-            self.backbone = Transform_encoder(self) ### prend en entrée n bandes
+            #self.backbone = Transform_encoder(self) ### prend en entrée n bandes
 
 
 
@@ -337,10 +335,14 @@ class BaseMethod(pl.LightningModule):
                 self.backbone.maxpool = nn.Identity() # before was :(maxpool): MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
 
         elif self.backbone_name.startswith("efficientnet"):
-            self.features_dim = 1280
-            # remove fc layer
-            self.backbone.fc = nn.Identity()
+
             
+            #remove fc layer
+            self.features_dim = self.backbone._fc.in_features
+
+            self.backbone._fc = nn.Identity()
+            self.backbone._swish = nn.Identity()
+
         else:
             self.features_dim = self.backbone.num_features
 
@@ -790,7 +792,15 @@ class BaseMomentumMethod(BaseMethod):
             kwargs["window_size"] = 4
 
         method = self.extra_args.get("method", None)
-        self.momentum_backbone = self.base_model(method, **kwargs)
+
+        if "efficientnet_lite0" in self.backbone_name :
+            self.momentum_backbone = self.base_model(method)
+        else:
+            self.momentum_backbone = self.base_model(method, **kwargs)
+
+            #self.momentum_backbone = Transform_encoder(self) ### prend en entrée n bandes
+
+
         if self.backbone_name.startswith("resnet"):
             # remove fc layer
             self.momentum_backbone.fc = nn.Identity()
@@ -799,6 +809,17 @@ class BaseMomentumMethod(BaseMethod):
                     self.nb_bands, 64, kernel_size=3, stride=1, padding=2, bias=False
                 )
                 self.momentum_backbone.maxpool = nn.Identity()
+
+       
+        elif self.backbone_name.startswith("efficientnet"):
+
+            
+            #remove fc layer
+            self.features_dim = self.momentum_backbone._fc.in_features
+
+            self.momentum_backbone._fc = nn.Identity()
+            self.momentum_backbone._swish = nn.Identity()
+            
         else:
             self.features_dim = self.momentum_backbone.num_features
 
