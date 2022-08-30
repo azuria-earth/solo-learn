@@ -106,15 +106,23 @@ def Apply_transformations(X, transform):
 
 
 
-def SegmentationAlbumentationsTransform(X, transform):
+def SegmentationAlbumentationsTransform(X, T):
 
-    
-    print('--------------------------------------', )
+    import albumentations as A
+     
+    transform  = A.Compose(
+        [
+            A.RandomResizedCrop(224,224),
+            A.GaussianBlur(p=0.1),
+            A.Solarize(p=0.1),
+            A.HorizontalFlip(p=0.1),
+            A.ShiftScaleRotate(p=.9),
+        ]
+        )
   
     New_X = []
     for x in X :
         img = np.array(x.permute(1,2,0).cpu())
-        print('transform(image=img)', transform(image=img))
         aug = transform(image=img)["image"].transpose(2,0,1)
         New_X.append(torch.from_numpy(aug))
 
@@ -666,10 +674,16 @@ class BaseMethod(pl.LightningModule):
             # batch[image] = [batch_t[i][image] for i in range(len(batch_t))]
             # indexes, X, targets = batch[index], batch[image], batch[label]
 
-            if self.nb_bands > 3 :
-                X = self.transform(X)
-            else:
-                X = Apply_transformations(X, self.transform)
+            # if self.nb_bands > 3 :
+            #     X = self.transform(X)
+            # else:
+            #     X = Apply_transformations(X, self.transform)
+
+            X_t = [SegmentationAlbumentationsTransform(X, self.transform) for _ in range(self.num_crops)]
+            X = X_t
+
+            #X = self.transform(X)
+
 
             
 
@@ -989,8 +1003,6 @@ class BaseMomentumMethod(BaseMethod):
 
 
         if isinstance(batch, dict) :
-
-            #if self.dataset in ["EuroSAT"] :
             
             indexes, X, targets = batch[index], batch[image], batch[label]
             
@@ -1011,10 +1023,13 @@ class BaseMomentumMethod(BaseMethod):
             # batch[image] = [batch_t[i][image] for i in range(len(batch_t))]
             # indexes, X, targets = batch[index], batch[image], batch[label]
 
-            if self.nb_bands > 3 :
-                X = self.transform(X)
-            else:
-                X = Apply_transformations(X, self.transform)
+            # if self.nb_bands > 3 :
+            #     X = self.transform(X)
+            # else:
+            #     X = Apply_transformations(X, self.transform)
+
+            X = self.transform(X)
+
 
             
         else :

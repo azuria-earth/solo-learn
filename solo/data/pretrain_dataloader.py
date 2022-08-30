@@ -461,6 +461,8 @@ class CustomTransform(BaseTransform):
                 transforms.RandomHorizontalFlip(p=horizontal_flip_prob),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=mean, std=std),
+
+                
             ]
         )
 
@@ -514,38 +516,33 @@ class MultispectraleTransform(BaseTransform):
 
         super().__init__()
 
-        #import albumentations as A
+        import albumentations as A
      
-        # self.transform  = A.Compose(
-        #     [
-        #         A.RandomResizedCrop(224,224),
-        #         A.GaussianBlur(p=0.1),
-        #         A.Solarize(p=0.1),
-        #         A.HorizontalFlip(p=0.1),
-        #         A.ShiftScaleRotate(p=.9),
-        #     ]
-        #     )
-
-        self.transform = transforms.Compose(
+        self.transform  = A.Compose(
             [
-                transforms.RandomResizedCrop(
-                    crop_size,
-                    scale=(min_scale, max_scale),
-                    interpolation=transforms.InterpolationMode.BICUBIC,
-                ),
-                # transforms.RandomApply(
-                #     [A.transforms.ColorJitter(brightness, contrast, saturation, hue)],
-                #     p=color_jitter_prob,
-                # ),
-                #transforms.RandomGrayscale(p=gray_scale_prob),
-                transforms.RandomApply([GaussianBlur()], p=gaussian_prob),
-                transforms.RandomApply([Solarization()], p=solarization_prob),
-                transforms.RandomApply([Equalization()], p=equalization_prob),
-                transforms.RandomHorizontalFlip(p=horizontal_flip_prob),
-                #transforms.ToTensor(),
-                #transforms.Normalize(mean=mean, std=std),
+                A.RandomResizedCrop(224,224),
+                A.GaussianBlur(p=0.1),
+                A.Solarize(p=0.1),
+                A.HorizontalFlip(p=0.1),
+                A.ShiftScaleRotate(p=.9),
             ]
-        )
+            )
+
+        # self.transform = transforms.Compose(
+        #     [
+        #         transforms.RandomResizedCrop(
+        #             crop_size,
+        #             scale=(min_scale, max_scale),
+        #             interpolation=transforms.InterpolationMode.BICUBIC,
+        #         ),
+              
+        #         #transforms.RandomApply([GaussianBlur()], p=gaussian_prob),
+        #         #transforms.RandomApply([Solarization()], p=solarization_prob),
+        #         #transforms.RandomApply([Equalization()], p=equalization_prob),
+        #         #transforms.RandomHorizontalFlip(p=horizontal_flip_prob),
+             
+        #     ]
+        # )
 
 class EurosatTransform(BaseTransform):
 
@@ -707,7 +704,8 @@ def prepare_transform(dataset: str, **kwargs) -> Any:
         return STLTransform(**kwargs)
     elif dataset in ["imagenet", "imagenet100"]:
         return ImagenetTransform(**kwargs)
-    elif dataset in ["EuroSAT"]:
+    elif dataset in ["Potsdam2D", "RESISC45", "SEN12MS", "OSCD", "UC_Merced", "EuroSAT"]:
+        print('================ MultispectraleTransform ===================')
         return MultispectraleTransform(**kwargs)#EurosatTransform(**kwargs)
     elif dataset == "custom":
         return CustomTransform(**kwargs)
