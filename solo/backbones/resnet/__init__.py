@@ -21,7 +21,6 @@ from .resnet import resnet18 as default_resnet18
 from .resnet import resnet50 as default_resnet50
 
 
-
 def resnet18(method, *args, **kwargs):
     return default_resnet18(*args, **kwargs)
 

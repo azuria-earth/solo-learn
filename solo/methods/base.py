@@ -62,6 +62,9 @@ from torch.nn.modules import Conv2d
 from torch.autograd import Variable
 
 import torchvision.transforms as T
+import numpy as np
+
+
 
 def static_lr(
     get_lr: Callable, param_group_indexes: Sequence[int], lrs_to_replace: Sequence[float]
@@ -85,12 +88,13 @@ def Resize_images(img, new_size):
     return new_img
 
 def Apply_transformations(X, transform):
-
+   
     transform_toPIL = T.ToPILImage()
 
     view_1 = []
     view_2 = []
     for x in X :
+
         transf_x = transform(transform_toPIL(x))
         view_1.append(transf_x[0])
         view_2.append(transf_x[1])
@@ -98,6 +102,23 @@ def Apply_transformations(X, transform):
     X_transf = [torch.stack(view_1).to(torch.device("cuda")), torch.stack(view_2).to(torch.device("cuda"))]
    
     return X_transf
+
+
+
+
+def SegmentationAlbumentationsTransform(X, transform):
+
+    
+    print('--------------------------------------', )
+  
+    New_X = []
+    for x in X :
+        img = np.array(x.permute(1,2,0).cpu())
+        print('transform(image=img)', transform(image=img))
+        aug = transform(image=img)["image"].transpose(2,0,1)
+        New_X.append(torch.from_numpy(aug))
+
+    return torch.stack(New_X).to(torch.device("cuda"))
 
 
 def Transform_encoder(self):
@@ -319,7 +340,7 @@ class BaseMethod(pl.LightningModule):
         else:
             self.backbone = self.base_model(method, **kwargs) # here **kwargs = {'img_size':224}
 
-            #self.backbone = Transform_encoder(self) ### prend en entrée n bandes
+            self.backbone = Transform_encoder(self) ### prend en entrée n bandes
 
 
 
@@ -613,6 +634,7 @@ class BaseMethod(pl.LightningModule):
         return self._base_shared_step(X, targets)
 
 
+    
 
     def training_step(self, batch: List[Any], batch_idx: int) -> Dict[str, Any]:
         """Training step for pytorch lightning. It does all the shared operations, such as
@@ -627,19 +649,32 @@ class BaseMethod(pl.LightningModule):
             Dict[str, Any]: dict with the classification loss, features and logits.
         """
 
+
         if isinstance(batch, dict) :
             
             index, image, label = batch.keys()
             indexes, X, targets = batch[index], batch[image], batch[label]
             
-            A = torch.cat([Resize_images(img, 224) for img in batch[image]], dim=0)
+            # A = torch.cat([Resize_images(img, 224) for img in batch[image]], dim=0)
 
-            batch_s = int(A.shape[0]/self.nb_bands)
-            X = A.reshape(batch_s, self.nb_bands, 224, 224)
-            X = X.to(torch.device("cuda"))
+            # batch_s = int(A.shape[0]/self.nb_bands)
+            # X = A.reshape(batch_s, self.nb_bands, 224, 224)
+            # X = X.to(torch.device("cuda")) 
                         
-            X = Apply_transformations(X, self.transform)
+            # index, image, label = batch.keys()
+            # batch_t = self.transform(batch)
+            # batch[image] = [batch_t[i][image] for i in range(len(batch_t))]
+            # indexes, X, targets = batch[index], batch[image], batch[label]
+
+            if self.nb_bands > 3 :
+                X = self.transform(X)
+            else:
+                X = Apply_transformations(X, self.transform)
+
             
+
+          
+
         else :
             _, X, targets = batch
 
@@ -798,7 +833,7 @@ class BaseMomentumMethod(BaseMethod):
         else:
             self.momentum_backbone = self.base_model(method, **kwargs)
 
-            #self.momentum_backbone = Transform_encoder(self) ### prend en entrée n bandes
+            self.momentum_backbone = Transform_encoder(self) ### prend en entrée n bandes
 
 
         if self.backbone_name.startswith("resnet"):
@@ -952,21 +987,35 @@ class BaseMomentumMethod(BaseMethod):
 
         outs = super().training_step(batch, batch_idx)
 
+
         if isinstance(batch, dict) :
+
+            #if self.dataset in ["EuroSAT"] :
             
-            index, image, label = batch.keys()
             indexes, X, targets = batch[index], batch[image], batch[label]
+            
+            # A = torch.cat([Resize_images(img, 224) for img in batch[image]], dim=0)
 
-            A = torch.cat([Resize_images(img, 224) for img in batch[image]], dim=0)
+            # batch_s = int(A.shape[0]/self.nb_bands)
+            # X = A.reshape(batch_s, self.nb_bands, 224, 224)
+            # X = X.to(torch.device("cuda")) 
+                        
+            
+            # X_transf = [self.transform(X) for _ in range(self.num_crops)]
+            # X = X_transf
 
-            batch_s = int(A.shape[0]/self.nb_bands)
+            #X = self.transform(X)
 
-            X = A.reshape(batch_s, self.nb_bands, 224, 224)
-            X = X.to(torch.device("cuda"))
-           
-            #X = [X, X]
-            X = Apply_transformations(X, self.transform)
-            #X = [self.transform(X) for _ in range(self.num_crops)]
+            # index, image, label = batch.keys()
+            # batch_t = self.transform(batch)
+            # batch[image] = [batch_t[i][image] for i in range(len(batch_t))]
+            # indexes, X, targets = batch[index], batch[image], batch[label]
+
+            if self.nb_bands > 3 :
+                X = self.transform(X)
+            else:
+                X = Apply_transformations(X, self.transform)
+
             
         else :
             _, X, targets = batch

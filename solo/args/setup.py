@@ -31,6 +31,8 @@ from solo.methods import METHODS
 from solo.utils.auto_resumer import AutoResumer
 from solo.utils.checkpointer import Checkpointer
 
+from pathlib import Path
+
 try:
     from solo.utils.auto_umap import AutoUMAP
 except ImportError:
@@ -81,6 +83,12 @@ def parse_args_pretrain() -> argparse.Namespace:
     parser.add_argument("--auto_umap", action="store_true")
     parser.add_argument("--auto_resume", action="store_true")
     temp_args, _ = parser.parse_known_args()
+
+    parser.add_argument("-ts_path", "--tensorboard_logs_path", 
+        type=Path,
+        help="Specify path where Tensorboard files will be generated", 
+        required=True
+    )
 
     # optionally add checkpointer and AutoUMAP args
     if temp_args.save_checkpoint:

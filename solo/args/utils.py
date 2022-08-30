@@ -28,6 +28,7 @@ N_CLASSES_PER_DATASET = {
     "imagenet": 1000,
     "imagenet100": 100,
     "RESISC45": 45,
+    "EuroSAT": 10,
 }
 
 
@@ -246,6 +247,11 @@ def additional_setup_pretrain(args: Namespace):
     scale_factor = args.batch_size * len(args.devices) * num_nodes / 256
     args.lr = args.lr * scale_factor
     args.classifier_lr = args.classifier_lr * scale_factor
+
+    print('in args.utils => scale_factor', scale_factor)
+    print('in args.utils => num_nodes', num_nodes)
+    print('in args.utils => args.lr', args.lr)
+
 
 
 def additional_setup_linear(args: Namespace):

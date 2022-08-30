@@ -16,9 +16,15 @@
 # FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
+from torchvision import models
+# from torchvision.models import resnet18
+# from torchvision.models import resnet50
 
-from torchvision.models import resnet18
-from torchvision.models import resnet50
+def resnet18(*args, **kwargs):
+    return models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+
+def resnet50(*args, **kwargs):
+    return models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
 
 __all__ = ["resnet18", "resnet50"]
 

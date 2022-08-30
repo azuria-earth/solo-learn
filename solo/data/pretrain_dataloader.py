@@ -20,7 +20,11 @@
 import os
 import random
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Sequence, Type, Union
+from typing import Any, Callable, List, Optional, Sequence, Type, Union, Dict
+
+from torchgeo.transforms import AugmentationSequential, indices
+import kornia.augmentation as K
+import torch.nn as nn
 
 import torch
 import torchvision
@@ -37,6 +41,8 @@ except ImportError:
     _h5_available = False
 else:
     _h5_available = True
+
+
 
 
 def dataset_with_index(DatasetClass: Type[Dataset]) -> Type[Dataset]:
@@ -72,6 +78,7 @@ class CustomDatasetWithoutLabels(Dataset):
 
     def __len__(self):
         return len(self.images)
+
 
 
 class GaussianBlur:
@@ -145,7 +152,6 @@ class NCropAugmentation:
         Returns:
             List[torch.Tensor]: an image in the tensor format.
         """
-
         return [self.transform(x) for _ in range(self.num_crops)]
 
     def __repr__(self) -> str:
@@ -180,6 +186,7 @@ class BaseTransform:
     """Adds callable base class to implement different transformation pipelines."""
 
     def __call__(self, x: Image) -> torch.Tensor:
+
         return self.transform(x)
 
     def __repr__(self) -> str:
@@ -457,6 +464,232 @@ class CustomTransform(BaseTransform):
             ]
         )
 
+class MultispectraleTransform(BaseTransform):
+    def __init__(
+        self,
+        brightness: float,
+        contrast: float,
+        saturation: float,
+        hue: float,
+        color_jitter_prob: float = 0.8,
+        gray_scale_prob: float = 0.2,
+        horizontal_flip_prob: float = 0.5,
+        gaussian_prob: float = 0.5,
+        solarization_prob: float = 0.0,
+        equalization_prob: float = 0.0,
+        min_scale: float = 0.08,
+        max_scale: float = 1.0,
+        crop_size: int = 224,
+        mean: Sequence[float] = IMAGENET_DEFAULT_MEAN,
+        std: Sequence[float] = IMAGENET_DEFAULT_STD,
+    ):
+        """Class that applies Custom transformations.
+        If you want to do exoteric augmentations, you can just re-write this class.
+
+        Args:
+            brightness (float): sampled uniformly in [max(0, 1 - brightness), 1 + brightness].
+            contrast (float): sampled uniformly in [max(0, 1 - contrast), 1 + contrast].
+            saturation (float): sampled uniformly in [max(0, 1 - saturation), 1 + saturation].
+            hue (float): sampled uniformly in [-hue, hue].
+            color_jitter_prob (float, optional): probability of applying color jitter.
+                Defaults to 0.8.
+            gray_scale_prob (float, optional): probability of converting to gray scale.
+                Defaults to 0.2.
+            horizontal_flip_prob (float, optional): probability of flipping horizontally.
+                Defaults to 0.5.
+            gaussian_prob (float, optional): probability of applying gaussian blur.
+                Defaults to 0.0.
+            solarization_prob (float, optional): probability of applying solarization.
+                Defaults to 0.0.
+            equalization_prob (float, optional): probability of applying equalization.
+                Defaults to 0.0.
+            min_scale (float, optional): minimum scale of the crops. Defaults to 0.08.
+            max_scale (float, optional): maximum scale of the crops. Defaults to 1.0.
+            crop_size (int, optional): size of the crop. Defaults to 224.
+            mean (Sequence[float], optional): mean values for normalization.
+                Defaults to IMAGENET_DEFAULT_MEAN.
+            std (Sequence[float], optional): std values for normalization.
+                Defaults to IMAGENET_DEFAULT_STD.
+        """
+
+        super().__init__()
+
+        #import albumentations as A
+     
+        # self.transform  = A.Compose(
+        #     [
+        #         A.RandomResizedCrop(224,224),
+        #         A.GaussianBlur(p=0.1),
+        #         A.Solarize(p=0.1),
+        #         A.HorizontalFlip(p=0.1),
+        #         A.ShiftScaleRotate(p=.9),
+        #     ]
+        #     )
+
+        self.transform = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(
+                    crop_size,
+                    scale=(min_scale, max_scale),
+                    interpolation=transforms.InterpolationMode.BICUBIC,
+                ),
+                # transforms.RandomApply(
+                #     [A.transforms.ColorJitter(brightness, contrast, saturation, hue)],
+                #     p=color_jitter_prob,
+                # ),
+                #transforms.RandomGrayscale(p=gray_scale_prob),
+                transforms.RandomApply([GaussianBlur()], p=gaussian_prob),
+                transforms.RandomApply([Solarization()], p=solarization_prob),
+                transforms.RandomApply([Equalization()], p=equalization_prob),
+                transforms.RandomHorizontalFlip(p=horizontal_flip_prob),
+                #transforms.ToTensor(),
+                #transforms.Normalize(mean=mean, std=std),
+            ]
+        )
+
+class EurosatTransform(BaseTransform):
+
+    
+
+    def __init__(
+        self,
+        brightness: float,
+        contrast: float,
+        saturation: float,
+        hue: float,
+        color_jitter_prob: float = 0.8,
+        gray_scale_prob: float = 0.2,
+        horizontal_flip_prob: float = 0.5,
+        gaussian_prob: float = 0.5,
+        solarization_prob: float = 0.0,
+        equalization_prob: float = 0.0,
+        min_scale: float = 0.08,
+        max_scale: float = 1.0,
+        crop_size: int = 224,
+        mean: Sequence[float] = IMAGENET_DEFAULT_MEAN,
+        std: Sequence[float] = IMAGENET_DEFAULT_STD,
+    ):
+        """Class that applies Custom transformations.
+        If you want to do exoteric augmentations, you can just re-write this class.
+
+        Args:
+            brightness (float): sampled uniformly in [max(0, 1 - brightness), 1 + brightness].
+            contrast (float): sampled uniformly in [max(0, 1 - contrast), 1 + contrast].
+            saturation (float): sampled uniformly in [max(0, 1 - saturation), 1 + saturation].
+            hue (float): sampled uniformly in [-hue, hue].
+            color_jitter_prob (float, optional): probability of applying color jitter.
+                Defaults to 0.8.
+            gray_scale_prob (float, optional): probability of converting to gray scale.
+                Defaults to 0.2.
+            horizontal_flip_prob (float, optional): probability of flipping horizontally.
+                Defaults to 0.5.
+            gaussian_prob (float, optional): probability of applying gaussian blur.
+                Defaults to 0.0.
+            solarization_prob (float, optional): probability of applying solarization.
+                Defaults to 0.0.
+            equalization_prob (float, optional): probability of applying equalization.
+                Defaults to 0.0.
+            min_scale (float, optional): minimum scale of the crops. Defaults to 0.08.
+            max_scale (float, optional): maximum scale of the crops. Defaults to 1.0.
+            crop_size (int, optional): size of the crop. Defaults to 224.
+            mean (Sequence[float], optional): mean values for normalization.
+                Defaults to IMAGENET_DEFAULT_MEAN.
+            std (Sequence[float], optional): std values for normalization.
+                Defaults to IMAGENET_DEFAULT_STD.
+        """
+
+        mins = [
+            1013.0,
+            676.0,
+            448.0,
+            247.0,
+            269.0,
+            253.0,
+            243.0,
+            189.0,
+            61.0,
+            4.0,
+            33.0,
+            11.0,
+            186.0,
+        ]
+        maxs = [
+            2309.0,
+            4543.05,
+            4720.2,
+            5293.05,
+            3902.05,
+            4473.0,
+            5447.0,
+            5948.05,
+            1829.0,
+            23.0,
+            4894.05,
+            4076.05,
+            5846.0,
+        ]
+        bands = {
+            "B1": "Coastal Aerosol",
+            "B2": "Blue",
+            "B3": "Green",
+            "B4": "Red",
+            "B5": "Vegetation Red Edge 1",
+            "B6": "Vegetation Red Edge 2",
+            "B7": "Vegetation Red Edge 3",
+            "B8": "NIR 1",
+            "B8A": "NIR 2",
+            "B9": "Water Vapour",
+            "B10": "SWIR 1",
+            "B11": "SWIR 2",
+            "B12": "SWIR 3",
+        }
+
+        super().__init__()
+
+        augmentations = AugmentationSequential(
+            K.RandomResizedCrop(size=(crop_size, crop_size), scale=(min_scale, max_scale), p=0.25),
+            K.RandomHorizontalFlip(p=horizontal_flip_prob), 
+
+            data_keys=["image"]
+        )
+
+
+        transforms = nn.Sequential(
+            MinMaxNormalize(mins, maxs),
+            augmentations,
+        )
+
+        
+        self.transform = transforms.to(torch.device("cuda"))
+
+        
+
+
+
+
+class MinMaxNormalize(nn.Module):
+    """Normalize channels to the range [0, 1] using min/max values."""
+
+    def __init__(self, min: List[float], max: List[float]) -> None:
+        super().__init__()
+        self.min = torch.tensor(min)[:, None, None]
+        self.max = torch.tensor(max)[:, None, None]
+        self.denominator = self.max - self.min
+
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        x = inputs["image"]
+
+        # Batch
+        if x.ndim == 4:
+            x = (x - self.min[None, ...].to(torch.device("cuda"))) / self.denominator[None, ...].to(torch.device("cuda"))
+        # Sample
+        else:
+            x = (x - self.min) / self.denominator
+
+        inputs["image"] = x.clamp(0, 1)
+        return inputs
+
+
 
 def prepare_transform(dataset: str, **kwargs) -> Any:
     """Prepares transforms for a specific dataset. Optionally uses multi crop.
@@ -474,10 +707,13 @@ def prepare_transform(dataset: str, **kwargs) -> Any:
         return STLTransform(**kwargs)
     elif dataset in ["imagenet", "imagenet100"]:
         return ImagenetTransform(**kwargs)
+    elif dataset in ["EuroSAT"]:
+        return MultispectraleTransform(**kwargs)#EurosatTransform(**kwargs)
     elif dataset == "custom":
         return CustomTransform(**kwargs)
     else:
         raise ValueError(f"{dataset} is not currently supported.")
+
 
 
 def prepare_n_crop_transform(
@@ -497,6 +733,7 @@ def prepare_n_crop_transform(
 
     T = []
     for transform, num_crops in zip(transforms, num_crops_per_aug):
+
         T.append(NCropAugmentation(transform, num_crops))
     
     return FullTransformPipeline(T)
