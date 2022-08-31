@@ -106,24 +106,12 @@ def Apply_transformations(X, transform):
 
 
 
-def SegmentationAlbumentationsTransform(X, T):
+def SegmentationAlbumentationsTransform(X, Transform):
 
-    import albumentations as A
-     
-    transform  = A.Compose(
-        [
-            A.RandomResizedCrop(224,224),
-            A.GaussianBlur(p=0.1),
-            A.Solarize(p=0.1),
-            A.HorizontalFlip(p=0.1),
-            A.ShiftScaleRotate(p=.9),
-        ]
-        )
-  
     New_X = []
     for x in X :
         img = np.array(x.permute(1,2,0).cpu())
-        aug = transform(image=img)["image"].transpose(2,0,1)
+        aug = Transform(image=img)["image"].transpose(2,0,1)
         New_X.append(torch.from_numpy(aug))
 
     return torch.stack(New_X).to(torch.device("cuda"))
