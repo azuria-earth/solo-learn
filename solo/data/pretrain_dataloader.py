@@ -518,13 +518,13 @@ class MultispectraleTransform(BaseTransform):
 
         import albumentations as A
      
-        transform  = A.Compose(
+        self.transform  = A.Compose(
         [
             A.RandomResizedCrop(224,224),
             # A.GaussianBlur(p=0.6),
-            A.Solarize(p=0.6),
-            # A.HorizontalFlip(p=0.4),
-            A.ShiftScaleRotate(p=0.5),
+            #A.Solarize(p=0.6),
+            #A.HorizontalFlip(p=0.7),
+            A.ShiftScaleRotate(p=0.2),
         ]
         )
 
@@ -690,7 +690,7 @@ def prepare_transform(dataset: str, **kwargs) -> Any:
         return STLTransform(**kwargs)
     elif dataset in ["imagenet", "imagenet100"]:
         return ImagenetTransform(**kwargs)
-    elif dataset in ["Potsdam2D", "RESISC45", "SEN12MS", "OSCD", "UC_Merced", "EuroSAT"]:
+    elif dataset in ["Potsdam2D", "RESISC45", "SEN12MS", "OSCD", "UC_Merced", "EuroSAT", "OPSSAT"]:
         print('================ MultispectraleTransform ===================')
         return MultispectraleTransform(**kwargs).transform #EurosatTransform(**kwargs)
     elif dataset == "custom":

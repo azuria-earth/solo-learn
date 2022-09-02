@@ -29,6 +29,7 @@ N_CLASSES_PER_DATASET = {
     "imagenet100": 100,
     "RESISC45": 45,
     "EuroSAT": 10,
+    "OPSSAT": 8,
 }
 
 
