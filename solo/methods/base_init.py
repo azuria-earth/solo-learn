@@ -324,7 +324,6 @@ class BaseMethod(pl.LightningModule):
 
         # initialize backbone
         kwargs = self.backbone_args.copy()
-
         cifar = kwargs.pop("cifar", False)
         # swin specific
         if "swin" in self.backbone_name and cifar:
@@ -379,9 +378,6 @@ class BaseMethod(pl.LightningModule):
         # can provide up to ~20% speed up
         if not no_channel_last:
             self = self.to(memory_format=torch.channels_last)
-
-
-    
 
 
     

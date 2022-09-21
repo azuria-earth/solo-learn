@@ -84,6 +84,8 @@ class Checkpointer(Callback):
         Args:
             trainer (pl.Trainer): pytorch lightning trainer object.
         """
+        print('trainer.logger =======', trainer.logger)
+        print('self.logdir.exists() =======',self.logdir.exists())
 
         if trainer.logger is None:
             if self.logdir.exists():
@@ -93,6 +95,8 @@ class Checkpointer(Callback):
             version = "offline-" + random_string()
             while version in existing_versions:
                 version = "offline-" + random_string()
+
+            
         else:
             version = str(trainer.logger.version)
             self.wandb_run_id = version

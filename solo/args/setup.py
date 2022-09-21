@@ -152,6 +152,12 @@ def parse_args_linear() -> argparse.Namespace:
     # linear model
     parser = METHODS["linear"].add_model_specific_args(parser)
 
+    parser.add_argument("-ts_path", "--tensorboard_logs_path", 
+        type=Path,
+        help="Specify path where Tensorboard files will be generated", 
+        required=True
+    )
+
     # THIS LINE IS KEY TO PULL WANDB AND SAVE_CHECKPOINT
     parser.add_argument("--save_checkpoint", action="store_true")
     parser.add_argument("--auto_resume", action="store_true")

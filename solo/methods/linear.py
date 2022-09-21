@@ -318,7 +318,13 @@ class LinearModel(pl.LightningModule):
                 batch size, loss, accuracy @1 and accuracy @5.
         """
 
-        X, target = batch
+        if isinstance(batch, dict) :
+            
+            index, image, label = batch.keys()
+            indexes, X, target = batch[index], batch[image], batch[label]
+        
+        else :
+            X, target = batch
 
         metrics = {"batch_size": X.size(0)}
         if self.training and self.mixup_func is not None:

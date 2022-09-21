@@ -518,17 +518,97 @@ class MultispectraleTransform(BaseTransform):
 
         import albumentations as A
      
+        # self.transform  = A.Compose(
+        # [
+        #     A.RandomResizedCrop(224,224),
+        #     A.GaussianBlur(p=0.1),
+        #     A.Solarize(p=0.1),
+        #     A.HorizontalFlip(p=0.1),
+        #     A.ShiftScaleRotate(p=0.4),
+        # ]
+        # )
+
+        ## RESISC45 Best augmentation
         self.transform  = A.Compose(
         [
             A.RandomResizedCrop(224,224),
-            # A.GaussianBlur(p=0.6),
-            #A.Solarize(p=0.6),
-            #A.HorizontalFlip(p=0.7),
             A.ShiftScaleRotate(p=0.2),
         ]
         )
 
-    
+class OpssatTransform(BaseTransform):
+    def __init__(
+        self,
+        brightness: float,
+        contrast: float,
+        saturation: float,
+        hue: float,
+        color_jitter_prob: float = 0.8,
+        gray_scale_prob: float = 0.2,
+        horizontal_flip_prob: float = 0.5,
+        gaussian_prob: float = 0.5,
+        solarization_prob: float = 0.0,
+        equalization_prob: float = 0.0,
+        min_scale: float = 0.08,
+        max_scale: float = 1.0,
+        crop_size: int = 224,
+        mean: Sequence[float] = IMAGENET_DEFAULT_MEAN,
+        std: Sequence[float] = IMAGENET_DEFAULT_STD,
+    ):
+        """Class that applies Custom transformations.
+        If you want to do exoteric augmentations, you can just re-write this class.
+
+        Args:
+            brightness (float): sampled uniformly in [max(0, 1 - brightness), 1 + brightness].
+            contrast (float): sampled uniformly in [max(0, 1 - contrast), 1 + contrast].
+            saturation (float): sampled uniformly in [max(0, 1 - saturation), 1 + saturation].
+            hue (float): sampled uniformly in [-hue, hue].
+            color_jitter_prob (float, optional): probability of applying color jitter.
+                Defaults to 0.8.
+            gray_scale_prob (float, optional): probability of converting to gray scale.
+                Defaults to 0.2.
+            horizontal_flip_prob (float, optional): probability of flipping horizontally.
+                Defaults to 0.5.
+            gaussian_prob (float, optional): probability of applying gaussian blur.
+                Defaults to 0.0.
+            solarization_prob (float, optional): probability of applying solarization.
+                Defaults to 0.0.
+            equalization_prob (float, optional): probability of applying equalization.
+                Defaults to 0.0.
+            min_scale (float, optional): minimum scale of the crops. Defaults to 0.08.
+            max_scale (float, optional): maximum scale of the crops. Defaults to 1.0.
+            crop_size (int, optional): size of the crop. Defaults to 224.
+            mean (Sequence[float], optional): mean values for normalization.
+                Defaults to IMAGENET_DEFAULT_MEAN.
+            std (Sequence[float], optional): std values for normalization.
+                Defaults to IMAGENET_DEFAULT_STD.
+        """
+
+        super().__init__()
+
+        import albumentations as A
+     
+        # self.transform  = A.Compose(
+        # [
+        #     A.RandomResizedCrop(224,224),
+        #     A.GaussianBlur(p=0.1),
+        #     A.Solarize(p=0.1),
+        #     A.HorizontalFlip(p=0.1),
+        #     A.ShiftScaleRotate(p=0.4),
+        # ]
+        # )
+
+        ## Opssat Best augmentation
+        self.transform  = A.Compose(
+        [
+            A.RandomResizedCrop(224,224),
+            A.ShiftScaleRotate(p=0.2),
+            # A.Normalize(mean =(64.6, 106.4, 109.9),
+            # std=(44.4, 63.7, 62), max_pixel_value=255)
+        ]
+        )
+
+        
 
 class EurosatTransform(BaseTransform):
 
@@ -690,9 +770,12 @@ def prepare_transform(dataset: str, **kwargs) -> Any:
         return STLTransform(**kwargs)
     elif dataset in ["imagenet", "imagenet100"]:
         return ImagenetTransform(**kwargs)
-    elif dataset in ["Potsdam2D", "RESISC45", "SEN12MS", "OSCD", "UC_Merced", "EuroSAT", "OPSSAT"]:
+    elif dataset in ["Potsdam2D", "RESISC45", "SEN12MS", "OSCD", "UC_Merced", "EuroSAT"]:
         print('================ MultispectraleTransform ===================')
         return MultispectraleTransform(**kwargs).transform #EurosatTransform(**kwargs)
+    elif dataset in ["OPSSAT"]:
+        print('================ OpssatTransform ===================')
+        return OpssatTransform(**kwargs).transform #EurosatTransform(**kwargs)
     elif dataset == "custom":
         return CustomTransform(**kwargs)
     else:

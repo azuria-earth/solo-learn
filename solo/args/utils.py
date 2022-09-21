@@ -109,7 +109,6 @@ def additional_setup_pretrain(args: Namespace):
             setattr(args, p, getattr(args, p) * unique_augs)
 
     args.unique_augs = unique_augs
-    print('unique_augs =========================================================================', unique_augs)
 
     if unique_augs > 1:
         args.transform_kwargs = [
@@ -248,11 +247,6 @@ def additional_setup_pretrain(args: Namespace):
     scale_factor = args.batch_size * len(args.devices) * num_nodes / 256
     args.lr = args.lr * scale_factor
     args.classifier_lr = args.classifier_lr * scale_factor
-
-    print('in args.utils => scale_factor', scale_factor)
-    print('in args.utils => num_nodes', num_nodes)
-    print('in args.utils => args.lr', args.lr)
-
 
 
 def additional_setup_linear(args: Namespace):
