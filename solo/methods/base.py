@@ -50,7 +50,9 @@ from solo.backbones import (
     wide_resnet28w2,
     wide_resnet28w8,
     efficientnet_lite0,
+    efficientnet,
 )
+
 from solo.utils.knn import WeightedKNNClassifier
 from solo.utils.lars import LARS
 from solo.utils.metrics import accuracy_at_k, weighted_mean
@@ -173,6 +175,7 @@ class BaseMethod(pl.LightningModule):
         "wide_resnet28w2": wide_resnet28w2,
         "wide_resnet28w8": wide_resnet28w8,
         "efficientnet_lite0": efficientnet_lite0,
+        "efficientnet": efficientnet,
     }
     _OPTIMIZERS = {
         "sgd": torch.optim.SGD,
@@ -277,7 +280,7 @@ class BaseMethod(pl.LightningModule):
         # resnet backbone related
         self.backbone_args = backbone_args
         # training related
-        self.num_classes = num_classes
+        self.num_classes = num_classes        
         self.nb_bands = nb_bands
         self.transform = transform
         self.max_epochs = max_epochs
@@ -332,8 +335,13 @@ class BaseMethod(pl.LightningModule):
 
         method = self.extra_args.get("method", None)
 
-        if "efficientnet_lite0" in self.backbone_name :
+        print('method ---------------------------------------------------', method)
+        
+
+        if "efficientnet" in self.backbone_name :
+            
             self.backbone = self.base_model(method)
+            
         else:
             self.backbone = self.base_model(method, **kwargs) # here **kwargs = {'img_size':224}
 
@@ -353,19 +361,17 @@ class BaseMethod(pl.LightningModule):
                 self.backbone.maxpool = nn.Identity() # before was :(maxpool): MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
 
         elif self.backbone_name.startswith("efficientnet"):
-
             
             #remove fc layer
             self.features_dim = self.backbone._fc.in_features
-
             self.backbone._fc = nn.Identity()
             self.backbone._swish = nn.Identity()
 
         else:
             self.features_dim = self.backbone.num_features
 
-  
         self.classifier = nn.Linear(self.features_dim, num_classes)
+
 
         if self.knn_eval:
             self.knn = WeightedKNNClassifier(k=self.knn_k, distance_fx="euclidean")
@@ -605,13 +611,13 @@ class BaseMethod(pl.LightningModule):
         """
 
         out = self(X)
-
         logits = out["logits"]
 
         loss = F.cross_entropy(logits, targets, ignore_index=-1)
         
         # handle when the number of classes is smaller than 5
         top_k_max = min(5, logits.size(1))
+
         acc1, acc5 = accuracy_at_k(logits, targets, top_k=(1, top_k_max))
 
         out.update({"loss": loss, "acc1": acc1, "acc5": acc5})
@@ -674,10 +680,6 @@ class BaseMethod(pl.LightningModule):
             X = X_t
 
             #X = self.transform(X)
-
-
-            
-
           
 
         else :

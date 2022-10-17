@@ -106,7 +106,7 @@ def parse_args_pretrain() -> argparse.Namespace:
     # parse args
     args = parser.parse_args()
 
-    # prepare arguments with additional setup
+    # # prepare arguments with additional setup
     additional_setup_pretrain(args)
 
     return args

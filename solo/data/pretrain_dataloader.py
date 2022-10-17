@@ -34,6 +34,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset
 from torchvision import transforms
 from torchvision.datasets import STL10, ImageFolder
+import albumentations as A
 
 try:
     from solo.data.h5_dataset import H5Dataset
@@ -515,8 +516,6 @@ class MultispectraleTransform(BaseTransform):
         """
 
         super().__init__()
-
-        import albumentations as A
      
         # self.transform  = A.Compose(
         # [
@@ -585,8 +584,6 @@ class OpssatTransform(BaseTransform):
         """
 
         super().__init__()
-
-        import albumentations as A
      
         # self.transform  = A.Compose(
         # [
@@ -754,7 +751,7 @@ class MinMaxNormalize(nn.Module):
 
 
 
-def prepare_transform(dataset: str, **kwargs) -> Any:
+def prepare_transform(dataset: str, SAT_dataset_list: List[str], **kwargs) -> Any:
     """Prepares transforms for a specific dataset. Optionally uses multi crop.
 
     Args:
@@ -770,7 +767,7 @@ def prepare_transform(dataset: str, **kwargs) -> Any:
         return STLTransform(**kwargs)
     elif dataset in ["imagenet", "imagenet100"]:
         return ImagenetTransform(**kwargs)
-    elif dataset in ["Potsdam2D", "RESISC45", "SEN12MS", "OSCD", "UC_Merced", "EuroSAT"]:
+    elif dataset in SAT_dataset_list:
         print('================ MultispectraleTransform ===================')
         return MultispectraleTransform(**kwargs).transform #EurosatTransform(**kwargs)
     elif dataset in ["OPSSAT"]:

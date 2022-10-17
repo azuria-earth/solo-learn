@@ -51,6 +51,7 @@ class LinearModel(pl.LightningModule):
     def __init__(
         self,
         backbone: nn.Module,
+        backbone_name: str,
         loss_func: Callable,
         num_classes: int,
         max_epochs: int,
@@ -102,7 +103,32 @@ class LinearModel(pl.LightningModule):
             features_dim = self.backbone.inplanes
         else:
             features_dim = self.backbone.num_features
-        self.classifier = nn.Linear(features_dim, num_classes)  # type: ignore
+
+        ###### classifier ###############
+        if backbone_name.startswith("efficientnet") :
+            self.classifier = nn.Sequential(nn.Linear(in_features=features_dim, out_features=num_classes, bias=True), nn.ReLU6())
+        else:
+
+            #self.classifier = nn.Linear(features_dim, num_classes)  # type: ignore
+            print('features_dim', features_dim)
+            #proj_hidden_dim = [512, 128, 64]
+            proj_hidden_dim = [1024, 512, 64]
+
+            self.classifier = nn.Sequential(
+                nn.Linear(features_dim, proj_hidden_dim[0]),
+                nn.BatchNorm1d(proj_hidden_dim[0]),
+                nn.ReLU(),
+                nn.Linear(proj_hidden_dim[0], proj_hidden_dim[1]),
+                nn.BatchNorm1d(proj_hidden_dim[1]),
+                nn.ReLU(),
+                nn.Linear(proj_hidden_dim[1], proj_hidden_dim[2]),
+                nn.Linear(proj_hidden_dim[2], num_classes))
+                # nn.BatchNorm1d(proj_hidden_dim[2]),
+                # nn.ReLU(),
+                # nn.Linear(proj_hidden_dim[2], num_classes))
+
+        
+
 
         if loss_func is None:
             loss_func = nn.CrossEntropyLoss()

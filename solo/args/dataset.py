@@ -44,6 +44,7 @@ def dataset_args(parser: ArgumentParser):
         "UC_Merced",
         "EuroSAT",
         "OPSSAT",
+        "BigEarthNet"
     ]
 
     parser.add_argument("--dataset", choices=SUPPORTED_DATASETS, type=str, required=True)
