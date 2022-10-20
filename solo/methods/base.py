@@ -299,6 +299,7 @@ class BaseMethod(pl.LightningModule):
         assert scheduler_interval in ["step", "epoch"]
         self.scheduler_interval = scheduler_interval
         self.num_large_crops = num_large_crops
+        num_small_crops = 2
         self.num_small_crops = num_small_crops
         self.knn_eval = knn_eval
         self.knn_k = knn_k
@@ -312,6 +313,8 @@ class BaseMethod(pl.LightningModule):
 
         # turn on multicrop if there are small crops
         self.multicrop = self.num_small_crops != 0
+
+        print('self.multicrop', self.multicrop)
 
         # if accumulating gradient then scale lr
         if self.accumulate_grad_batches:
@@ -616,16 +619,16 @@ class BaseMethod(pl.LightningModule):
         loss = F.cross_entropy(logits, targets, ignore_index=-1)
         
         # handle when the number of classes is smaller than 5
-        top_k_max = min(5, logits.size(1))
+        top_k_max = min(3, logits.size(1))
 
-        acc1, acc5 = accuracy_at_k(logits, targets, top_k=(1, top_k_max))
+        acc1, acc3 = accuracy_at_k(logits, targets, top_k=(1, top_k_max))
 
-        out.update({"loss": loss, "acc1": acc1, "acc5": acc5})
+        out.update({"loss": loss, "acc1": acc1, "acc3": acc3})
         return out
 
     def base_training_step(self, X: torch.Tensor, targets: torch.Tensor) -> Dict:
         """Allows user to re-write how the forward step behaves for the training_step.
-        Should always return a dict containing, at least, "loss", "acc1" and "acc5".
+        Should always return a dict containing, at least, "loss", "acc1" and "acc3".
         Defaults to _base_shared_step
 
         Args:
@@ -693,8 +696,7 @@ class BaseMethod(pl.LightningModule):
         assert len(X) == self.num_crops
 
         outs = [self.base_training_step(x, targets) for x in X[: self.num_large_crops]]
-        outs = {k: [out[k] for out in outs] for k in outs[0].keys()}
-              
+        outs = {k: [out[k] for out in outs] for k in outs[0].keys()}              
 
         if self.multicrop:
             multicrop_outs = [self.multicrop_forward(x) for x in X[self.num_large_crops :]]
@@ -705,12 +707,12 @@ class BaseMethod(pl.LightningModule):
         # loss and stats
         outs["loss"] = sum(outs["loss"]) / self.num_large_crops
         outs["acc1"] = sum(outs["acc1"]) / self.num_large_crops
-        outs["acc5"] = sum(outs["acc5"]) / self.num_large_crops
+        outs["acc3"] = sum(outs["acc3"]) / self.num_large_crops
 
         metrics = {
             "train_class_loss": outs["loss"],
             "train_acc1": outs["acc1"],
-            "train_acc5": outs["acc5"],
+            "train_acc3": outs["acc3"],
         }
 
 
@@ -728,7 +730,7 @@ class BaseMethod(pl.LightningModule):
 
     def base_validation_step(self, X: torch.Tensor, targets: torch.Tensor) -> Dict:
         """Allows user to re-write how the forward step behaves for the validation_step.
-        Should always return a dict containing, at least, "loss", "acc1" and "acc5".
+        Should always return a dict containing, at least, "loss", "acc1" and "acc3".
         Defaults to _base_shared_step
 
         Args:
@@ -775,7 +777,7 @@ class BaseMethod(pl.LightningModule):
             "batch_size": batch_size,
             "val_loss": out["loss"],
             "val_acc1": out["acc1"],
-            "val_acc5": out["acc5"],
+            "val_acc3": out["acc3"],
         }
         return metrics
 
@@ -790,13 +792,13 @@ class BaseMethod(pl.LightningModule):
 
         val_loss = weighted_mean(outs, "val_loss", "batch_size")
         val_acc1 = weighted_mean(outs, "val_acc1", "batch_size")
-        val_acc5 = weighted_mean(outs, "val_acc5", "batch_size")
+        val_acc3 = weighted_mean(outs, "val_acc3", "batch_size")
 
-        log = {"val_loss": val_loss, "val_acc1": val_acc1, "val_acc5": val_acc5}
+        log = {"val_loss": val_loss, "val_acc1": val_acc1, "val_acc3": val_acc3}
 
         if self.knn_eval and not self.trainer.sanity_checking:
-            val_knn_acc1, val_knn_acc5 = self.knn.compute()
-            log.update({"val_knn_acc1": val_knn_acc1, "val_knn_acc5": val_knn_acc5})
+            val_knn_acc1, val_knn_acc3 = self.knn.compute()
+            log.update({"val_knn_acc1": val_knn_acc1, "val_knn_acc3": val_knn_acc3})
 
         self.log_dict(log, sync_dist=True)
 
@@ -973,8 +975,8 @@ class BaseMomentumMethod(BaseMethod):
             logits = self.momentum_classifier(feats)
 
             loss = F.cross_entropy(logits, targets, ignore_index=-1)
-            acc1, acc5 = accuracy_at_k(logits, targets, top_k=(1, 5))
-            out.update({"logits": logits, "loss": loss, "acc1": acc1, "acc5": acc5})
+            acc1, acc3 = accuracy_at_k(logits, targets, top_k=(1, 5))
+            out.update({"logits": logits, "loss": loss, "acc1": acc1, "acc3": acc3})
 
         return out
 
@@ -999,28 +1001,6 @@ class BaseMomentumMethod(BaseMethod):
 
             index, image, label = batch.keys()
             indexes, X, targets = batch[index], batch[image], batch[label]
-            
-            # A = torch.cat([Resize_images(img, 224) for img in batch[image]], dim=0)
-
-            # batch_s = int(A.shape[0]/self.nb_bands)
-            # X = A.reshape(batch_s, self.nb_bands, 224, 224)
-            # X = X.to(torch.device("cuda")) 
-                        
-            
-            # X_transf = [self.transform(X) for _ in range(self.num_crops)]
-            # X = X_transf
-
-            #X = self.transform(X)
-
-            # index, image, label = batch.keys()
-            # batch_t = self.transform(batch)
-            # batch[image] = [batch_t[i][image] for i in range(len(batch_t))]
-            # indexes, X, targets = batch[index], batch[image], batch[label]
-
-            # if self.nb_bands > 3 :
-            #     X = self.transform(X)
-            # else:
-            #     X = Apply_transformations(X, self.transform)
 
             X_t = [SegmentationAlbumentationsTransform(X, self.transform) for _ in range(self.num_crops)]
             X = X_t
@@ -1048,14 +1028,14 @@ class BaseMomentumMethod(BaseMethod):
             momentum_outs["momentum_acc1"] = (
                 sum(momentum_outs["momentum_acc1"]) / self.num_large_crops
             )
-            momentum_outs["momentum_acc5"] = (
-                sum(momentum_outs["momentum_acc5"]) / self.num_large_crops
+            momentum_outs["momentum_acc3"] = (
+                sum(momentum_outs["momentum_acc3"]) / self.num_large_crops
             )
 
             metrics = {
                 "train_momentum_class_loss": momentum_outs["momentum_loss"],
                 "train_momentum_acc1": momentum_outs["momentum_acc1"],
-                "train_momentum_acc5": momentum_outs["momentum_acc5"],
+                "train_momentum_acc3": momentum_outs["momentum_acc3"],
             }
             self.log_dict(metrics, on_epoch=True, sync_dist=True)
 
@@ -1123,7 +1103,7 @@ class BaseMomentumMethod(BaseMethod):
                 "batch_size": batch_size,
                 "momentum_val_loss": out["loss"],
                 "momentum_val_acc1": out["acc1"],
-                "momentum_val_acc5": out["acc5"],
+                "momentum_val_acc3": out["acc3"],
             }
 
         return parent_metrics, metrics
@@ -1145,11 +1125,11 @@ class BaseMomentumMethod(BaseMethod):
 
             val_loss = weighted_mean(momentum_outs, "momentum_val_loss", "batch_size")
             val_acc1 = weighted_mean(momentum_outs, "momentum_val_acc1", "batch_size")
-            val_acc5 = weighted_mean(momentum_outs, "momentum_val_acc5", "batch_size")
+            val_acc3 = weighted_mean(momentum_outs, "momentum_val_acc3", "batch_size")
 
             log = {
                 "momentum_val_loss": val_loss,
                 "momentum_val_acc1": val_acc1,
-                "momentum_val_acc5": val_acc5,
+                "momentum_val_acc3": val_acc3,
             }
             self.log_dict(log, sync_dist=True)

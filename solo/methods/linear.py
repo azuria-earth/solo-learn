@@ -28,7 +28,7 @@ import torch.nn.functional as F
 from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from solo.methods.base import BaseMethod
 from solo.utils.lars import LARS
-from solo.utils.metrics import accuracy_at_k, weighted_mean
+from solo.utils.metrics import accuracy_at_k, weighted_mean, Coef_Kappa
 from solo.utils.misc import param_groups_layer_decay
 from torch.optim.lr_scheduler import ExponentialLR, MultiStepLR, ReduceLROnPlateau
 
@@ -104,9 +104,19 @@ class LinearModel(pl.LightningModule):
         else:
             features_dim = self.backbone.num_features
 
+        self.num_classes = num_classes
+
         ###### classifier ###############
         if backbone_name.startswith("efficientnet") :
+            print('features_dim =============================================================', features_dim)
+
+            #remove fc layer
+            self.features_dim = self.backbone._fc.in_features
+            self.backbone._fc = nn.Identity()
+            self.backbone._swish = nn.Identity()
+
             self.classifier = nn.Sequential(nn.Linear(in_features=features_dim, out_features=num_classes, bias=True), nn.ReLU6())
+            
         else:
 
             #self.classifier = nn.Linear(features_dim, num_classes)  # type: ignore
@@ -132,11 +142,14 @@ class LinearModel(pl.LightningModule):
 
         if loss_func is None:
             loss_func = nn.CrossEntropyLoss()
+
+
         self.loss_func = loss_func
 
         # training related
         self.max_epochs = max_epochs
         self.batch_size = batch_size
+        self.num_classes = num_classes
         self.optimizer = optimizer
         self.lr = lr
         self.weight_decay = weight_decay
@@ -331,7 +344,7 @@ class LinearModel(pl.LightningModule):
         return {"logits": logits, "feats": feats}
 
     def shared_step(
-        self, batch: Tuple, batch_idx: int
+        self, batch: Tuple, batch_idx: int, train: bool()
     ) -> Tuple[int, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Performs operations that are shared between the training nd validation steps.
 
@@ -361,9 +374,13 @@ class LinearModel(pl.LightningModule):
         else:
             out = self(X)["logits"]
             loss = F.cross_entropy(out, target)
-            acc1, acc5 = accuracy_at_k(out, target, top_k=(1, 5))
-            metrics.update({"loss": loss, "acc1": acc1, "acc5": acc5})
+            acc1, acc3 = accuracy_at_k(out, target, top_k=(1, 3))
+            coef_kappa, pred, targets = Coef_Kappa(out, target, self.num_classes)
 
+            
+            metrics.update({"loss": loss, "acc1": acc1, "acc3": acc3, "coef_kappa": coef_kappa, "pred": pred, "targets": targets})
+
+            
         return metrics
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
@@ -381,11 +398,11 @@ class LinearModel(pl.LightningModule):
         if not self.finetune:
             self.backbone.eval()
 
-        out = self.shared_step(batch, batch_idx)
+        out = self.shared_step(batch, batch_idx, train=True)
 
         log = {"train_loss": out["loss"]}
         if self.mixup_func is None:
-            log.update({"train_acc1": out["acc1"], "train_acc5": out["acc5"]})
+            log.update({"train_acc1": out["acc1"], "train_acc3": out["acc3"], "train_coef_kappa": out["coef_kappa"]})
 
         self.log_dict(log, on_epoch=True, sync_dist=True)
         return out["loss"]
@@ -403,13 +420,16 @@ class LinearModel(pl.LightningModule):
                 the classification loss and accuracies.
         """
 
-        out = self.shared_step(batch, batch_idx)
+        out = self.shared_step(batch, batch_idx, train=False)
 
         results = {
             "batch_size": out["batch_size"],
             "val_loss": out["loss"],
             "val_acc1": out["acc1"],
-            "val_acc5": out["acc5"],
+            "val_acc3": out["acc3"],
+            "val_coef_kappa": out["coef_kappa"],
+            "pred" : out["pred"],
+            "targets" : out["targets"],
         }
         return results
 
@@ -424,7 +444,39 @@ class LinearModel(pl.LightningModule):
 
         val_loss = weighted_mean(outs, "val_loss", "batch_size")
         val_acc1 = weighted_mean(outs, "val_acc1", "batch_size")
-        val_acc5 = weighted_mean(outs, "val_acc5", "batch_size")
+        val_acc3 = weighted_mean(outs, "val_acc3", "batch_size")
+        val_coef_kappa = weighted_mean(outs, "val_coef_kappa", "batch_size")
 
-        log = {"val_loss": val_loss, "val_acc1": val_acc1, "val_acc5": val_acc5}
+        log = {"val_loss": val_loss, "val_acc1": val_acc1, "val_acc3": val_acc3, "val_coef_kappa": val_coef_kappa}
         self.log_dict(log, sync_dist=True)
+
+        predictions =[]
+        targets = []
+        for out in outs :
+            predictions+=out["pred"].tolist()
+            targets+=out["targets"].tolist()
+
+        predictions = torch.as_tensor(predictions)
+        targets = torch.as_tensor(targets)
+
+
+        print('predictions', predictions)
+        print('targets', targets)
+
+        from torchmetrics import ConfusionMatrix
+        import seaborn as sns
+        import pandas as pd
+        import numpy
+        import matplotlib.pyplot as plt
+
+        confmat = ConfusionMatrix(num_classes=self.num_classes)
+
+        df_cm = pd.DataFrame(confmat(predictions, targets))
+        plt.figure(figsize = (10, 7))
+        fig_ = sns.heatmap(df_cm, annot = True, cmap = 'Spectral').get_figure()
+        plt.close(fig_)
+
+        self.logger.experiment.add_figure("Confusion matrix", fig_, self.current_epoch)
+
+        #print(confmat(pred, targets))
+

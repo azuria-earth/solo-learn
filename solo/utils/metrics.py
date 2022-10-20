@@ -20,6 +20,8 @@
 from typing import Dict, List, Sequence
 
 import torch
+from torchmetrics import CohenKappa
+
 
 
 def accuracy_at_k(
@@ -50,6 +52,34 @@ def accuracy_at_k(
             correct_k = correct[:k].contiguous().view(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
+
+def Coef_Kappa(
+    outputs: torch.Tensor, targets: torch.Tensor, num_classes: int
+) -> Sequence[int]:
+    """Computes Coef Kappa
+
+    Args:
+        outputs (torch.Tensor): output of a classifier (logits or probabilities).
+        targets (torch.Tensor): ground truth labels.
+
+    Returns:
+        coeff 
+    """
+
+    cohenkappa = CohenKappa(num_classes=num_classes)
+
+    with torch.no_grad():
+
+        _, pred = outputs.topk(1, 1, True, True)
+        
+        pred = pred.t()[0].cpu()
+        targets = targets.cpu()
+
+        coef_kappa = cohenkappa(pred, targets)
+
+        print('coef_kappa', coef_kappa)
+
+        return coef_kappa, pred, targets
 
 
 def weighted_mean(outputs: List[Dict], key: str, batch_size_key: str) -> float:
