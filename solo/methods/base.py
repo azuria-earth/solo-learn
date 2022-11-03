@@ -299,7 +299,10 @@ class BaseMethod(pl.LightningModule):
         assert scheduler_interval in ["step", "epoch"]
         self.scheduler_interval = scheduler_interval
         self.num_large_crops = num_large_crops
+
+
         num_small_crops = 2
+
         self.num_small_crops = num_small_crops
         self.knn_eval = knn_eval
         self.knn_k = knn_k
@@ -313,8 +316,6 @@ class BaseMethod(pl.LightningModule):
 
         # turn on multicrop if there are small crops
         self.multicrop = self.num_small_crops != 0
-
-        print('self.multicrop', self.multicrop)
 
         # if accumulating gradient then scale lr
         if self.accumulate_grad_batches:
@@ -337,8 +338,6 @@ class BaseMethod(pl.LightningModule):
             kwargs["window_size"] = 4
 
         method = self.extra_args.get("method", None)
-
-        print('method ---------------------------------------------------', method)
         
 
         if "efficientnet" in self.backbone_name :
@@ -613,7 +612,9 @@ class BaseMethod(pl.LightningModule):
             Dict: dict containing the classification loss, logits, features, acc@1 and acc@5.
         """
 
+        
         out = self(X)
+
         logits = out["logits"]
 
         loss = F.cross_entropy(logits, targets, ignore_index=-1)

@@ -596,14 +596,18 @@ class OpssatTransform(BaseTransform):
         # )
 
         ## Opssat Best augmentation
-        self.transform  = A.Compose(
-        [
-            A.RandomResizedCrop(224,224),
-            A.ShiftScaleRotate(p=0.2),
-            # A.Normalize(mean =(64.6, 106.4, 109.9),
-            # std=(44.4, 63.7, 62), max_pixel_value=255)
-        ]
-        )
+        # self.transform  = A.Compose(
+        # [
+        #     A.RandomResizedCrop(224,224),
+        #     A.ShiftScaleRotate(p=0.2),
+        #     # A.Normalize(mean =(64.6, 106.4, 109.9),
+        #     # std=(44.4, 63.7, 62), max_pixel_value=255)
+        # ]
+        # )
+
+        ## Opssat Best augmentation
+        self.transform  =  A.Compose(
+        [A.HorizontalFlip(p=1), A.VerticalFlip(p=1)])
 
         
 

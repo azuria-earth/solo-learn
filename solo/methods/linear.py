@@ -28,10 +28,16 @@ import torch.nn.functional as F
 from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from solo.methods.base import BaseMethod
 from solo.utils.lars import LARS
-from solo.utils.metrics import accuracy_at_k, weighted_mean, Coef_Kappa
+from solo.utils.metrics import accuracy_at_k, weighted_mean, Coef_Kappa, BadPred
 from solo.utils.misc import param_groups_layer_decay
 from torch.optim.lr_scheduler import ExponentialLR, MultiStepLR, ReduceLROnPlateau
 
+from torchmetrics import ConfusionMatrix
+import seaborn as sns
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import sklearn
 
 class LinearModel(pl.LightningModule):
     _OPTIMIZERS = {
@@ -54,6 +60,8 @@ class LinearModel(pl.LightningModule):
         backbone_name: str,
         loss_func: Callable,
         num_classes: int,
+        fold: str,
+        train_data_path: str,
         max_epochs: int,
         batch_size: int,
         optimizer: str,
@@ -106,21 +114,23 @@ class LinearModel(pl.LightningModule):
 
         self.num_classes = num_classes
 
+        self.fold = fold
+        self.train_data_path = train_data_path
+
+
+
         ###### classifier ###############
         if backbone_name.startswith("efficientnet") :
-            print('features_dim =============================================================', features_dim)
-
             #remove fc layer
             self.features_dim = self.backbone._fc.in_features
             self.backbone._fc = nn.Identity()
             self.backbone._swish = nn.Identity()
 
             self.classifier = nn.Sequential(nn.Linear(in_features=features_dim, out_features=num_classes, bias=True), nn.ReLU6())
-            
+
         else:
 
             #self.classifier = nn.Linear(features_dim, num_classes)  # type: ignore
-            print('features_dim', features_dim)
             #proj_hidden_dim = [512, 128, 64]
             proj_hidden_dim = [1024, 512, 64]
 
@@ -278,6 +288,7 @@ class LinearModel(pl.LightningModule):
                 ]
             )
 
+
         optimizer = optimizer(
             parameters,
             lr=self.lr,
@@ -315,6 +326,7 @@ class LinearModel(pl.LightningModule):
             scheduler = ReduceLROnPlateau(optimizer)
         elif self.scheduler == "step":
             scheduler = MultiStepLR(optimizer, self.lr_decay_steps, gamma=0.1)
+
         elif self.scheduler == "exponential":
             scheduler = ExponentialLR(optimizer, self.weight_decay)
         else:
@@ -333,7 +345,13 @@ class LinearModel(pl.LightningModule):
         Returns:
             Dict[str, Any]: a dict containing features and logits.
         """
-
+        n=0
+        if isinstance(X, dict) :
+            n=1
+            batch = X
+            index, image, label = batch.keys()            
+            indexes, X, target = batch[index], batch[image], batch[label]
+       
         if not self.no_channel_last:
             X = X.to(memory_format=torch.channels_last)
 
@@ -341,7 +359,10 @@ class LinearModel(pl.LightningModule):
             feats = self.backbone(X)
 
         logits = self.classifier(feats)
-        return {"logits": logits, "feats": feats}
+        if n > 0 :
+            return {"logits": logits, "feats": feats, "target": target}
+        else:
+            return {"logits": logits, "feats": feats}
 
     def shared_step(
         self, batch: Tuple, batch_idx: int, train: bool()
@@ -359,26 +380,32 @@ class LinearModel(pl.LightningModule):
 
         if isinstance(batch, dict) :
             
-            index, image, label = batch.keys()
+            index, image, label = batch.keys()            
             indexes, X, target = batch[index], batch[image], batch[label]
-        
         else :
             X, target = batch
 
+
+    
         metrics = {"batch_size": X.size(0)}
         if self.training and self.mixup_func is not None:
+
             X, target = self.mixup_func(X, target)
             out = self(X)["logits"]
             loss = self.loss_func(out, target)
             metrics.update({"loss": loss})
         else:
+
             out = self(X)["logits"]
             loss = F.cross_entropy(out, target)
             acc1, acc3 = accuracy_at_k(out, target, top_k=(1, 3))
-            coef_kappa, pred, targets = Coef_Kappa(out, target, self.num_classes)
+            coef_kappa, pred, targets = Coef_Kappa(out, target, self.num_classes)   
 
-            
-            metrics.update({"loss": loss, "acc1": acc1, "acc3": acc3, "coef_kappa": coef_kappa, "pred": pred, "targets": targets})
+            if not train :  
+                bad_pred_ind = BadPred(out, target, indexes)       
+                metrics.update({"loss": loss, "acc1": acc1, "acc3": acc3, "coef_kappa": coef_kappa, "pred": pred, "targets": targets, "bad_pred_ind": bad_pred_ind})
+            else:
+                metrics.update({"loss": loss, "acc1": acc1, "acc3": acc3, "coef_kappa": coef_kappa, "pred": pred, "targets": targets})
 
             
         return metrics
@@ -430,7 +457,9 @@ class LinearModel(pl.LightningModule):
             "val_coef_kappa": out["coef_kappa"],
             "pred" : out["pred"],
             "targets" : out["targets"],
+            "bad_pred_ind":out["bad_pred_ind"]
         }
+
         return results
 
     def validation_epoch_end(self, outs: List[Dict[str, Any]]):
@@ -447,36 +476,52 @@ class LinearModel(pl.LightningModule):
         val_acc3 = weighted_mean(outs, "val_acc3", "batch_size")
         val_coef_kappa = weighted_mean(outs, "val_coef_kappa", "batch_size")
 
+
         log = {"val_loss": val_loss, "val_acc1": val_acc1, "val_acc3": val_acc3, "val_coef_kappa": val_coef_kappa}
         self.log_dict(log, sync_dist=True)
 
-        predictions =[]
-        targets = []
-        for out in outs :
-            predictions+=out["pred"].tolist()
-            targets+=out["targets"].tolist()
+       
 
-        predictions = torch.as_tensor(predictions)
-        targets = torch.as_tensor(targets)
+    def prediction_step(trainer, model, test_loader, device, classes):
 
+        num_classes = len(classes)
 
-        print('predictions', predictions)
+        print('trainer.predict(model, test_loader)', trainer.predict(model, test_loader))
+
+        outs = trainer.predict(model, test_loader)[0]
+        out = outs["logits"].to(device)
+        target = outs["target"]
+        target = torch.as_tensor(target).to(device)
+
+        loss = F.cross_entropy(out, target)
+        acc1, acc3 = accuracy_at_k(out, target, top_k=(1, 3))
+        coef_kappa, pred, targets = Coef_Kappa(out, target, num_classes)   
+
+        _, pred = out.topk(1, 1, True, True)
+        pred = pred.t()[0]
+
+        print('pred', len(pred))
+        print('pred', pred)
         print('targets', targets)
 
-        from torchmetrics import ConfusionMatrix
-        import seaborn as sns
-        import pandas as pd
-        import numpy
-        import matplotlib.pyplot as plt
+        labels = np.arange(num_classes)
+        cm = sklearn.metrics.confusion_matrix(targets.cpu(), pred.cpu(), labels=labels, normalize='true')
+                
+        plt.figure(figsize=(15,10))
 
-        confmat = ConfusionMatrix(num_classes=self.num_classes)
+        df_cm = pd.DataFrame(cm, index = classes, columns = classes)
 
-        df_cm = pd.DataFrame(confmat(predictions, targets))
         plt.figure(figsize = (10, 7))
         fig_ = sns.heatmap(df_cm, annot = True, cmap = 'Spectral').get_figure()
+        plt.ylabel('True label')
+        plt.xlabel('Predicted label')
+        trainer.logger.experiment.add_figure("Confusion matrix", fig_)
         plt.close(fig_)
 
-        self.logger.experiment.add_figure("Confusion matrix", fig_, self.current_epoch)
+        print('acc1', acc1)
+        print('acc3', acc3)
+        print('loss', loss)
+        print('coef_kappa', coef_kappa)
 
-        #print(confmat(pred, targets))
+
 

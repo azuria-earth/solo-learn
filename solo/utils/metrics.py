@@ -20,9 +20,8 @@
 from typing import Dict, List, Sequence
 
 import torch
-from torchmetrics import CohenKappa
-
-
+#from torchmetrics import CohenKappa
+import sklearn.metrics
 
 def accuracy_at_k(
     outputs: torch.Tensor, targets: torch.Tensor, top_k: Sequence[int] = (1, 5)
@@ -53,6 +52,23 @@ def accuracy_at_k(
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
 
+def BadPred(outputs, targets, indexes) :   
+
+    with torch.no_grad():
+
+        _, pred = outputs.topk(1, 1, True, True)
+        
+        pred = pred.t()[0].cpu().tolist()
+        targets = targets.cpu().tolist()
+        bad_pred_ind = []
+        for i in range(len(pred)):
+            if pred[i] != targets[i] :
+                bad_pred_ind+= [indexes[i].tolist()]
+        return bad_pred_ind
+
+
+
+
 def Coef_Kappa(
     outputs: torch.Tensor, targets: torch.Tensor, num_classes: int
 ) -> Sequence[int]:
@@ -66,18 +82,45 @@ def Coef_Kappa(
         coeff 
     """
 
-    cohenkappa = CohenKappa(num_classes=num_classes)
-
+    # cohenkappa = CohenKappa(num_classes=num_classes)
+    import sklearn
+    import numpy as np
     with torch.no_grad():
 
         _, pred = outputs.topk(1, 1, True, True)
         
         pred = pred.t()[0].cpu()
-        targets = targets.cpu()
+        targets = targets.cpu() 
 
-        coef_kappa = cohenkappa(pred, targets)
+        #coef_kappa = sklearn.metrics.cohen_kappa_score(targets, pred)
+        
+        Classes = np.unique(np.array(targets.tolist() + pred.tolist()))
 
-        print('coef_kappa', coef_kappa)
+        cm = sklearn.metrics.confusion_matrix(targets, pred, labels=Classes)
+
+        # Sample size
+        n = np.sum(cm)
+        # Expected matrix
+        sum0 = np.sum(cm, axis=0)
+        sum1 = np.sum(cm, axis=1)
+        expected = np.outer(sum0, sum1) / n
+        # Number of classes
+        n_classes = len(Classes)
+        # Calculate p_o (the observed proportionate agreement) and
+        # p_e (the probability of random agreement)
+        identity = np.identity(n_classes)
+        p_o = np.sum((identity * cm) / n)
+        p_e = np.sum((identity * expected) / n)
+        # Calculate Cohen's kappa
+        coef_kappa = (p_o - p_e) / (1 - p_e)
+        if p_e == 1 :
+            print('p_e == 1, coef=', coef_kappa)
+            print('targets', targets)
+            print('pred', pred)
+
+            print('cm', cm)
+
+        #print(f'p_o = {p_o}, p_e = {p_e}, kappa = {coef_kappa:3.1f}')
 
         return coef_kappa, pred, targets
 
@@ -100,4 +143,5 @@ def weighted_mean(outputs: List[Dict], key: str, batch_size_key: str) -> float:
         value += out[batch_size_key] * out[key]
         n += out[batch_size_key]
     value = value / n
+  
     return value.squeeze(0)

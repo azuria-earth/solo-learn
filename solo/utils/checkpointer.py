@@ -84,8 +84,7 @@ class Checkpointer(Callback):
         Args:
             trainer (pl.Trainer): pytorch lightning trainer object.
         """
-        print('trainer.logger =======', trainer.logger)
-        print('self.logdir.exists() =======',self.logdir.exists())
+        
 
         if trainer.logger is None:
             if self.logdir.exists():
