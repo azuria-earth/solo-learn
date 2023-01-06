@@ -125,7 +125,7 @@ def parse_args_linear() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--pretrained_feature_extractor", type=str, required=True)
+    parser.add_argument("--pretrained_feature_extractor", type=str, required=False)
     parser.add_argument("--pretrain_method", type=str, default=None)
     # add support for auto augment (randaug by default)
     parser.add_argument("--auto_augment", action="store_true")

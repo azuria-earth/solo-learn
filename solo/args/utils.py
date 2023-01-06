@@ -30,6 +30,8 @@ N_CLASSES_PER_DATASET = {
     "RESISC45": 45,
     "EuroSAT": 10,
     "OPSSAT": 8,
+    "UC_Merced": 21,
+    "BigEarthNet": 19,
 }
 
 
@@ -57,12 +59,13 @@ def additional_setup_pretrain(args: Namespace):
     if args.dataset in N_CLASSES_PER_DATASET:
         args.num_classes = N_CLASSES_PER_DATASET[args.dataset]
     else:
-        # hack to maintain the current pipeline
-        # even if the custom dataset doesn't have any labels
-        args.num_classes = max(
-            1,
-            len([entry.name for entry in os.scandir(args.train_data_path) if entry.is_dir]),
-        )
+        print('Nouveau dataset, AJOUTER LE NOMBRE DE CLASSES DANS N_CLASSES_PER_DATASET')
+        # # hack to maintain the current pipeline
+        # # even if the custom dataset doesn't have any labels
+        # args.num_classes = max(
+        #     1,
+        #     len([entry.name for entry in os.scandir(args.train_data_path) if entry.is_dir]),
+        # )
 
     unique_augs = max(
         len(p)

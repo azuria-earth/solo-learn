@@ -517,23 +517,13 @@ class MultispectraleTransform(BaseTransform):
 
         super().__init__()
      
-        # self.transform  = A.Compose(
-        # [
-        #     A.RandomResizedCrop(224,224),
-        #     A.GaussianBlur(p=0.1),
-        #     A.Solarize(p=0.1),
-        #     A.HorizontalFlip(p=0.1),
-        #     A.ShiftScaleRotate(p=0.4),
-        # ]
-        # )
-
-        ## RESISC45 Best augmentation
         self.transform  = A.Compose(
         [
             A.RandomResizedCrop(224,224),
             A.ShiftScaleRotate(p=0.2),
         ]
         )
+
 
 class OpssatTransform(BaseTransform):
     def __init__(
@@ -774,9 +764,9 @@ def prepare_transform(dataset: str, SAT_dataset_list: List[str], **kwargs) -> An
     elif dataset in SAT_dataset_list:
         print('================ MultispectraleTransform ===================')
         return MultispectraleTransform(**kwargs).transform #EurosatTransform(**kwargs)
-    elif dataset in ["OPSSAT"]:
-        print('================ OpssatTransform ===================')
-        return OpssatTransform(**kwargs).transform #EurosatTransform(**kwargs)
+    # elif dataset in ["OPSSAT"]:
+    #     print('================ OpssatTransform ===================')
+    #     return OpssatTransform(**kwargs).transform #EurosatTransform(**kwargs)
     elif dataset == "custom":
         return CustomTransform(**kwargs)
     else:

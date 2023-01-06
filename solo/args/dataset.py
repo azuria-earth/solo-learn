@@ -52,7 +52,6 @@ def dataset_args(parser: ArgumentParser):
     # dataset path
     parser.add_argument("--train_data_path", type=Path, required=True)
     parser.add_argument("--data_path", type=Path, required=None)
-    
     parser.add_argument("--val_data_path", type=Path, default=None)
     parser.add_argument(
         "--data_format", default="image_folder", choices=["image_folder", "dali", "h5"]

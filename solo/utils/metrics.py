@@ -88,8 +88,8 @@ def Coef_Kappa(
     with torch.no_grad():
 
         _, pred = outputs.topk(1, 1, True, True)
-        
-        pred = pred.t()[0].cpu()
+        pred = pred.t()[0]
+        pred = pred.cpu()        
         targets = targets.cpu() 
 
         #coef_kappa = sklearn.metrics.cohen_kappa_score(targets, pred)

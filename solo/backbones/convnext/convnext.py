@@ -26,14 +26,14 @@ from timm.models.registry import register_model
 @register_model
 def convnext_tiny(**kwargs):
     model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), **kwargs)
-    model = _create_convnext("convnext_tiny", pretrained=False, num_classes=0, **model_args)
+    model = _create_convnext("convnext_tiny", pretrained=True, num_classes=0, **model_args)
     return model
 
 
 @register_model
 def convnext_small(**kwargs):
     model_args = dict(depths=[3, 3, 27, 3], dims=[96, 192, 384, 768], **kwargs)
-    model = _create_convnext("convnext_small", pretrained=False, num_classes=0, **model_args)
+    model = _create_convnext("convnext_small", pretrained=True, num_classes=0, **model_args)
     return model
 
 

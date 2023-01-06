@@ -119,36 +119,64 @@ def SegmentationAlbumentationsTransform(X, Transform):
     return torch.stack(New_X).to(torch.device("cuda"))
 
 
-def Transform_encoder(self):
+def Transform_encoder(self, backbone):
 
-    #in_channels = 3
-    layer = self.backbone.conv1
-    # Creating new Conv2d layer
-    new_layer = Conv2d(
-        in_channels=self.nb_bands,
-        out_channels=layer.out_channels,
-        kernel_size=layer.kernel_size,
-        stride=layer.stride,
-        padding=layer.padding,
-        bias=layer.bias,
-    ).requires_grad_()
-    # initialize the weights from new channel with the red channel weights
-    copy_weights = 0
-    # Copying the weights from the old to the new layer
-    new_layer.weight[:, : layer.in_channels, :, :].data[:] = Variable(
-        layer.weight.clone(), requires_grad=True
-    )
-    # Copying the weights of the old layer to the extra channels
-    for i in range(self.nb_bands - layer.in_channels):
-        channel = layer.in_channels + i
-        new_layer.weight[:, channel : channel + 1, :, :].data[:] = Variable(
-            layer.weight[:, copy_weights : copy_weights + 1, ::].clone(),
-            requires_grad=True,
+    if self.backbone_name.startswith("resnet"):
+
+        #in_channels = 3
+        layer = backbone.conv1
+        # Creating new Conv2d layer
+        new_layer = Conv2d(
+            in_channels=self.nb_bands,
+            out_channels=layer.out_channels,
+            kernel_size=layer.kernel_size,
+            stride=layer.stride,
+            padding=layer.padding,
+            bias=layer.bias,
+        ).requires_grad_()
+        # initialize the weights from new channel with the red channel weights
+        copy_weights = 0
+        # Copying the weights from the old to the new layer
+        new_layer.weight[:, : layer.in_channels, :, :].data[:] = Variable(
+            layer.weight.clone(), requires_grad=True
         )
+        # Copying the weights of the old layer to the extra channels
+        for i in range(self.nb_bands - layer.in_channels):
+            channel = layer.in_channels + i
+            new_layer.weight[:, channel : channel + 1, :, :].data[:] = Variable(
+                layer.weight[:, copy_weights : copy_weights + 1, ::].clone(),
+                requires_grad=True,
+            )
 
-    self.backbone.conv1 = new_layer
+        backbone.conv1 = new_layer
 
-    return self.backbone
+    elif self.backbone_name.startswith("convnext"):
+        #in_channels = 3
+        layer = backbone.stem
+        ##Creating new Conv2d layer
+        new_layer = Conv2d(
+            in_channels=self.nb_bands,
+            out_channels=layer[0].out_channels,
+            kernel_size=layer[0].kernel_size,
+            stride=layer[0].stride,
+        ).requires_grad_()
+        # initialize the weights from new channel with the red channel weights
+        copy_weights = 0
+        # Copying the weights from the old to the new layer
+        new_layer.weight[:, : layer[0].in_channels, :, :].data[:] = Variable(
+            layer[0].weight.clone(), requires_grad=True
+        )
+        # Copying the weights of the old layer to the extra channels
+        for i in range(self.nb_bands - layer[0].in_channels):
+            channel = layer[0].in_channels + i
+            new_layer.weight[:, channel : channel + 1, :, :].data[:] = Variable(
+                layer[0].weight[:, copy_weights : copy_weights + 1, ::].clone(),
+                requires_grad=True,
+            )
+
+        backbone.stem = nn.Sequential(new_layer, layer[1])
+
+    return backbone
 
 
 class BaseMethod(pl.LightningModule):
@@ -338,16 +366,17 @@ class BaseMethod(pl.LightningModule):
             kwargs["window_size"] = 4
 
         method = self.extra_args.get("method", None)
-        
 
-        if "efficientnet" in self.backbone_name :
-            
+        if self.backbone_name.startswith("efficientnet") :
             self.backbone = self.base_model(method)
+
+        elif self.backbone_name.startswith("convnext") :
+            self.backbone = self.base_model(method)
+            self.backbone = Transform_encoder(self, backbone = self.backbone) 
             
         else:
             self.backbone = self.base_model(method, **kwargs) # here **kwargs = {'img_size':224}
-
-            self.backbone = Transform_encoder(self) ### prend en entrée n bandes
+            self.backbone = Transform_encoder(self, backbone = self.backbone) ### prend en entrée n bandes
 
 
 
@@ -580,6 +609,7 @@ class BaseMethod(pl.LightningModule):
 
         feats = self.backbone(X)
         logits = self.classifier(feats.detach())
+
         return {"logits": logits, "feats": feats}
 
     def multicrop_forward(self, X: torch.tensor) -> Dict[str, Any]:
@@ -624,7 +654,7 @@ class BaseMethod(pl.LightningModule):
 
         acc1, acc3 = accuracy_at_k(logits, targets, top_k=(1, top_k_max))
 
-        out.update({"loss": loss, "acc1": acc1, "acc3": acc3})
+        out.update({"loss": loss, "acc1": acc1, "acc3": acc3, "lr" : self.lr})
         return out
 
     def base_training_step(self, X: torch.Tensor, targets: torch.Tensor) -> Dict:
@@ -689,6 +719,7 @@ class BaseMethod(pl.LightningModule):
         else :
             _, X, targets = batch
 
+
         #print('========================  TRAINING STEP  =======================', len(X))
 
         X = [X] if isinstance(X, torch.Tensor) else X
@@ -709,11 +740,13 @@ class BaseMethod(pl.LightningModule):
         outs["loss"] = sum(outs["loss"]) / self.num_large_crops
         outs["acc1"] = sum(outs["acc1"]) / self.num_large_crops
         outs["acc3"] = sum(outs["acc3"]) / self.num_large_crops
+        outs["lr"] = sum(outs["lr"]) / self.num_large_crops
 
         metrics = {
             "train_class_loss": outs["loss"],
             "train_acc1": outs["acc1"],
             "train_acc3": outs["acc3"],
+            "lr": outs["lr"],
         }
 
 
@@ -838,12 +871,24 @@ class BaseMomentumMethod(BaseMethod):
 
         method = self.extra_args.get("method", None)
 
-        if "efficientnet_lite0" in self.backbone_name :
-            self.momentum_backbone = self.base_model(method)
-        else:
-            self.momentum_backbone = self.base_model(method, **kwargs)
+        # if "efficientnet_lite0" in self.backbone_name :
+        #     self.momentum_backbone = self.base_model(method)
+        # else:
+        #     self.momentum_backbone = self.base_model(method, **kwargs)
 
-            self.momentum_backbone = Transform_encoder(self) ### prend en entrée n bandes
+        #     #self.momentum_backbone = Transform_encoder(self) ### prend en entrée n bandes
+
+        if self.backbone_name.startswith("efficientnet") :
+            self.momentum_backbone = self.base_model(method)
+
+        elif self.backbone_name.startswith("convnext") :
+            self.momentum_backbone = self.base_model(method)
+            self.momentum_backbone = Transform_encoder(self, backbone = self.momentum_backbone) 
+            
+        else:
+            self.momentum_backbone = self.base_model(method, **kwargs) # here **kwargs = {'img_size':224}
+            self.momentum_backbone = Transform_encoder(self, backbone = self.momentum_backbone) ### prend en entrée n bandes
+
 
 
         if self.backbone_name.startswith("resnet"):
