@@ -31,6 +31,8 @@ from .swin import swin_tiny, swin_small, swin_base, swin_large
 from .vit import vit_tiny, vit_small, vit_base, vit_large
 from .wide_resnet import wide_resnet28w2, wide_resnet28w8
 from .efficientnet import efficientnet_lite0
+from .mobilenet import mobilenet_v2, mobilenet_v3_large, mobilenet_v3_small
+
 
 __all__ = [
     "resnet18",
@@ -54,5 +56,8 @@ __all__ = [
     "convnext_large",
     "wide_resnet28w2",
     "wide_resnet28w8",
-    "efficientnet_lite0",
+    "efficientnet_lite0"
+    "mobilenet_v2",
+    "mobilenet_v3_large",
+    "mobilenet_v3_small"
 ]
