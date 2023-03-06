@@ -35,6 +35,8 @@ from torch.utils.data.dataset import Dataset
 from torchvision import transforms
 from torchvision.datasets import STL10, ImageFolder
 import albumentations as A
+import kornia
+
 
 try:
     from solo.data.h5_dataset import H5Dataset
@@ -517,11 +519,31 @@ class MultispectraleTransform(BaseTransform):
 
         super().__init__()
      
-        self.transform  = A.Compose(
-        [
-            A.RandomResizedCrop(224,224),
-            A.ShiftScaleRotate(p=0.2),
-        ]
+        # self.transform  = A.Compose(
+        # [
+        #     A.RandomResizedCrop(224,224), #1
+        #     A.ShiftScaleRotate(p=0.2), #2
+        #     # A.RandomBrightnessContrast(p=0.2),
+        #     # A.ToGray(p=0.3),
+            
+        #     #A.ToGray(p=0.3),
+        #     # A.RandomBrightnessContrast(p=0.2),
+        #     # A.ShiftScaleRotate(p=0.2),
+        #     # A.RandomResizedCrop(224,224),
+
+        # ]
+        # )
+        self.transform = kornia.augmentation.RandomAffine(
+        degrees=(-180.0,180.0), 
+        translate=(0.3,0.3), #trying to present at least 50% of the complete image
+        scale=(0.8,1.2), 
+        shear=(-5,5,-5,5), 
+        resample="nearest", 
+        # same_on_batch=False, 
+        align_corners=False, 
+        padding_mode=2, 
+        p=1, 
+        keepdim=True
         )
 
 
@@ -763,7 +785,7 @@ def prepare_transform(dataset: str, SAT_dataset_list: List[str], **kwargs) -> An
         return ImagenetTransform(**kwargs)
     elif dataset in SAT_dataset_list:
         print('================ MultispectraleTransform ===================')
-        return MultispectraleTransform(**kwargs).transform #EurosatTransform(**kwargs)
+        return MultispectraleTransform(**kwargs)#.transform #EurosatTransform(**kwargs)
     # elif dataset in ["OPSSAT"]:
     #     print('================ OpssatTransform ===================')
     #     return OpssatTransform(**kwargs).transform #EurosatTransform(**kwargs)

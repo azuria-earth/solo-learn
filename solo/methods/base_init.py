@@ -173,6 +173,10 @@ class BaseMethod(pl.LightningModule):
         "wide_resnet28w2": wide_resnet28w2,
         "wide_resnet28w8": wide_resnet28w8,
         "efficientnet_lite0": efficientnet_lite0,
+        "mobilenet_v2": mobilenet_v2,
+        "mobilenet_v3_large": mobilenet_v3_large,
+        "mobilenet_v3_small": mobilenet_v3_small,
+
     }
     _OPTIMIZERS = {
         "sgd": torch.optim.SGD,

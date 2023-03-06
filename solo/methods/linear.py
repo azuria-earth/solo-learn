@@ -40,7 +40,6 @@ import matplotlib.pyplot as plt
 import sklearn
 
 
-
 class LinearModel(pl.LightningModule):
     _OPTIMIZERS = {
         "sgd": torch.optim.SGD,
@@ -304,9 +303,6 @@ class LinearModel(pl.LightningModule):
             **self.extra_optimizer_args,
         )
 
-        print('**self.extra_optimizer_args', self.extra_optimizer_args)
-        print('parameters', parameters)
-        print('self.lr', self.lr)
 
         # select scheduler
         if self.scheduler == "none":
@@ -370,7 +366,6 @@ class LinearModel(pl.LightningModule):
 
         with torch.set_grad_enabled(self.finetune):
             feats = self.backbone(X)
-            print('feats', feats.shape)
 
         logits = self.classifier(feats)
         if n > 0 :
@@ -380,9 +375,10 @@ class LinearModel(pl.LightningModule):
 
 
     def shared_step(
-        self, batch: Tuple, batch_idx: int, train: bool()
+        self, batch: Tuple, batch_idx: int, split: str 
     ) -> Tuple[int, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Performs operations that are shared between the training nd validation steps.
+        #train: bool()
 
         Args:
             batch (Tuple): a batch of images in the tensor format.
@@ -415,12 +411,46 @@ class LinearModel(pl.LightningModule):
 
             coef_kappa, pred, targets = Coef_Kappa(out, target, self.num_classes)   
 
-            if not train :  
-                bad_pred_ind = BadPred(out, target, indexes)       
+            if (split == 'val' or split == 'test') :
+                
+                bad_pred_ind = BadPred(out, target, indexes)
                 metrics.update({"loss": loss, "acc1": acc1, "acc3": acc3, "coef_kappa": coef_kappa, "pred": pred, "targets": targets, "lr": self.lr, "bad_pred_ind": bad_pred_ind})
             else:
                 metrics.update({"loss": loss, "acc1": acc1, "acc3": acc3, "coef_kappa": coef_kappa, "pred": pred, "targets": targets, "lr": self.lr})
 
+
+            # if split == 'test' :  
+                
+            #     import matplotlib
+            #     matplotlib.use('Agg')
+            #     import matplotlib.pyplot as plt
+            #     matplotlib.style.use('ggplot')
+            #     import seaborn as sns
+            #     sns.set()   
+            #     import os
+
+            #     out = out.cpu()
+
+            #     probabilities = torch.stack([F.softmax(torch.unsqueeze(torch.Tensor(out_i.numpy()), 0), dim=1)[0] for out_i in out])                
+            #     px = pd.DataFrame(probabilities.numpy(), columns= np.arange(self.num_classes))
+            #     px['Real_classes'] = target.cpu().tolist()
+
+            #     Path_image ='/home/sarah.laroui/workspace/bfte/self-supervised-on-torchgeo/Figure_data_distribution/'
+            #     batch =  len(os.listdir(Path_image))
+            #     for i in range(self.num_classes):
+
+            #         df_new = px[px['Real_classes'] == i] 
+            #         df_new = df_new.drop(columns=['Real_classes'])
+
+            #         if not df_new.empty:
+
+            #             sns_plot = sns.swarmplot(data=df_new, size=1.5)
+                   
+            #             fig = sns_plot.get_figure()
+            #             fig.suptitle('Distribution des proba de confiance, classe ' + np.str(i), fontsize=8)
+            #             fig.savefig(Path_image + "/2_samples_per_classes_13bands/test_classe_distribution_classe=" + np.str(i) + '_batch=' + np.str(len(os.listdir(Path_image + '2_samples_per_classes_13bands'))) + ".png")
+                        
+            
         return metrics
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
@@ -442,9 +472,7 @@ class LinearModel(pl.LightningModule):
         # print(torch.cuda.memory_allocated())
         # print('*********************************************')
         
-
-
-        out = self.shared_step(batch, batch_idx, train=True)
+        out = self.shared_step(batch, batch_idx, split='train')
 
         log = {"train_loss": out["loss"]}
         if self.mixup_func is None:
@@ -466,7 +494,7 @@ class LinearModel(pl.LightningModule):
                 dict with the batch_size (used for averaging),
                 the classification loss and accuracies.
         """
-        out = self.shared_step(batch, batch_idx, train=False)
+        out = self.shared_step(batch, batch_idx, split='val')
 
         results = {
             "batch_size": out["batch_size"],
@@ -514,7 +542,7 @@ class LinearModel(pl.LightningModule):
                 the classification loss and accuracies.
         """
 
-        out = self.shared_step(batch, batch_idx, train=False)
+        out = self.shared_step(batch, batch_idx, split='test')
 
         results = {
             "batch_size": out["batch_size"],

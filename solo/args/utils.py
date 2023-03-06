@@ -56,6 +56,7 @@ def additional_setup_pretrain(args: Namespace):
         - gaussian_prob, solarization_prob: optional augmentations settings.
     """
     
+
     if args.dataset in N_CLASSES_PER_DATASET:
         args.num_classes = N_CLASSES_PER_DATASET[args.dataset]
     else:
@@ -204,6 +205,7 @@ def additional_setup_pretrain(args: Namespace):
                 kwargs["std"] = args.std
 
     # create backbone-specific arguments
+
     args.backbone_args = {"cifar": args.dataset in ["cifar10", "cifar100"]}
     if "resnet" in args.backbone and "wide" not in args.backbone:
         args.backbone_args["zero_init_residual"] = args.zero_init_residual

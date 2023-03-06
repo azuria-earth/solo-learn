@@ -50,7 +50,9 @@ from solo.backbones import (
     wide_resnet28w2,
     wide_resnet28w8,
     efficientnet_lite0,
-    efficientnet,
+    mobilenet_v2,
+    mobilenet_v3_large,
+    mobilenet_v3_small,
 )
 
 from solo.utils.knn import WeightedKNNClassifier
@@ -117,6 +119,7 @@ def SegmentationAlbumentationsTransform(X, Transform):
         New_X.append(torch.from_numpy(aug))
 
     return torch.stack(New_X).to(torch.device("cuda"))
+
 
 
 def Transform_encoder(self, backbone):
@@ -203,7 +206,10 @@ class BaseMethod(pl.LightningModule):
         "wide_resnet28w2": wide_resnet28w2,
         "wide_resnet28w8": wide_resnet28w8,
         "efficientnet_lite0": efficientnet_lite0,
-        "efficientnet": efficientnet,
+        "mobilenet_v2": mobilenet_v2,
+        "mobilenet_v3_large": mobilenet_v3_large,
+        "mobilenet_v3_small": mobilenet_v3_small,
+
     }
     _OPTIMIZERS = {
         "sgd": torch.optim.SGD,
@@ -370,6 +376,9 @@ class BaseMethod(pl.LightningModule):
         if self.backbone_name.startswith("efficientnet") :
             self.backbone = self.base_model(method)
 
+        elif self.backbone_name.startswith("mobilenet") :
+            self.backbone = self.base_model(method)
+
         elif self.backbone_name.startswith("convnext") :
             self.backbone = self.base_model(method)
             self.backbone = Transform_encoder(self, backbone = self.backbone) 
@@ -397,6 +406,12 @@ class BaseMethod(pl.LightningModule):
             self.features_dim = self.backbone._fc.in_features
             self.backbone._fc = nn.Identity()
             self.backbone._swish = nn.Identity()
+
+        elif self.backbone_name.startswith("mobilenet"):
+            self.features_dim = self.backbone.classifier[1].in_features
+            self.backbone.classifier[1] = nn.Identity()
+            print('self.features_dim', self.features_dim)
+            print('self.backbone', self.backbone)
 
         else:
             self.features_dim = self.backbone.num_features
@@ -710,7 +725,9 @@ class BaseMethod(pl.LightningModule):
             # else:
             #     X = Apply_transformations(X, self.transform)
 
-            X_t = [SegmentationAlbumentationsTransform(X, self.transform) for _ in range(self.num_crops)]
+            #X_t = [SegmentationAlbumentationsTransform(X, self.transform) for _ in range(self.num_crops)]
+
+            X_t = [self.transform(X) for _ in range(self.num_crops)]
             X = X_t
 
             #X = self.transform(X)
@@ -726,6 +743,9 @@ class BaseMethod(pl.LightningModule):
 
         # check that we received the desired number of crops
         assert len(X) == self.num_crops
+
+        # print("self.num_large_crops", self.num_large_crops)
+        # print("self.num_crops", self.num_crops)
 
         outs = [self.base_training_step(x, targets) for x in X[: self.num_large_crops]]
         outs = {k: [out[k] for out in outs] for k in outs[0].keys()}              
@@ -1048,7 +1068,8 @@ class BaseMomentumMethod(BaseMethod):
             index, image, label = batch.keys()
             indexes, X, targets = batch[index], batch[image], batch[label]
 
-            X_t = [SegmentationAlbumentationsTransform(X, self.transform) for _ in range(self.num_crops)]
+            #X_t = [SegmentationAlbumentationsTransform(X, self.transform) for _ in range(self.num_crops)]
+            X_t = [self.transform(X) for _ in range(self.num_crops)]
             X = X_t
 
 
